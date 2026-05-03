@@ -85,6 +85,56 @@ final class BatchTextCleanerTests: XCTestCase {
         XCTAssertEqual(result?[0].cleanedText, "cleaned text")
     }
 
+    func testParseResponseStripsPreambleWhenFormattedLinesMatch() {
+        let base = Date()
+        let records = [
+            SessionRecord(speaker: .you, text: "original one", timestamp: base),
+            SessionRecord(speaker: .them, text: "original two", timestamp: base.addingTimeInterval(5)),
+        ]
+        let response = """
+        Here's the cleaned transcript:
+        [12:00:00] You: cleaned one
+        [12:00:05] Them: cleaned two
+        """
+
+        let result = BatchTextCleaner.parseResponse(response, originalRecords: records)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.count, 2)
+        XCTAssertEqual(result?[0].cleanedText, "cleaned one")
+        XCTAssertEqual(result?[1].cleanedText, "cleaned two")
+    }
+
+    func testParseResponseStripsTrailingCommentaryWhenFormattedLinesMatch() {
+        let base = Date()
+        let records = [
+            SessionRecord(speaker: .you, text: "original one", timestamp: base),
+        ]
+        let response = """
+        [12:00:00] You: cleaned one
+        Let me know if you'd like further edits.
+        """
+
+        let result = BatchTextCleaner.parseResponse(response, originalRecords: records)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?[0].cleanedText, "cleaned one")
+    }
+
+    func testParseResponseStripsCodeFences() {
+        let base = Date()
+        let records = [
+            SessionRecord(speaker: .you, text: "original", timestamp: base),
+        ]
+        let response = """
+        ```
+        [12:00:00] You: cleaned
+        ```
+        """
+
+        let result = BatchTextCleaner.parseResponse(response, originalRecords: records)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?[0].cleanedText, "cleaned")
+    }
+
     func testParseResponseEmptyLinePreservesOriginal() {
         let base = Date()
         let records = [
