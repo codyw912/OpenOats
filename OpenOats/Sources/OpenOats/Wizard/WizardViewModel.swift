@@ -81,6 +81,38 @@ final class WizardViewModel {
         }
     }
 
+    @ObservationIgnored nonisolated(unsafe) private var _openAICompatBaseURLInput = ""
+    var openAICompatBaseURLInput: String {
+        get { access(keyPath: \.openAICompatBaseURLInput); return _openAICompatBaseURLInput }
+        set {
+            withMutation(keyPath: \.openAICompatBaseURLInput) { _openAICompatBaseURLInput = newValue }
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                openAICompatValidationTask?.cancel()
+                openAICompatValidation = nil
+                isValidatingOpenAICompat = false
+            } else {
+                validateOpenAICompatEndpoint()
+            }
+        }
+    }
+
+    @ObservationIgnored nonisolated(unsafe) private var _openAICompatApiKeyInput = ""
+    var openAICompatApiKeyInput: String {
+        get { access(keyPath: \.openAICompatApiKeyInput); return _openAICompatApiKeyInput }
+        set {
+            withMutation(keyPath: \.openAICompatApiKeyInput) { _openAICompatApiKeyInput = newValue }
+            if !openAICompatBaseURLInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                validateOpenAICompatEndpoint()
+            }
+        }
+    }
+
+    @ObservationIgnored nonisolated(unsafe) private var _openAICompatModelInput = ""
+    var openAICompatModelInput: String {
+        get { access(keyPath: \.openAICompatModelInput); return _openAICompatModelInput }
+        set { withMutation(keyPath: \.openAICompatModelInput) { _openAICompatModelInput = newValue } }
+    }
+
     // MARK: - Validation State
 
     @ObservationIgnored nonisolated(unsafe) private var _openRouterValidation: APIKeyValidator.ValidationResult?
@@ -105,6 +137,18 @@ final class WizardViewModel {
     var isValidatingVoyage: Bool {
         get { access(keyPath: \.isValidatingVoyage); return _isValidatingVoyage }
         set { withMutation(keyPath: \.isValidatingVoyage) { _isValidatingVoyage = newValue } }
+    }
+
+    @ObservationIgnored nonisolated(unsafe) private var _openAICompatValidation: APIKeyValidator.ValidationResult?
+    var openAICompatValidation: APIKeyValidator.ValidationResult? {
+        get { access(keyPath: \.openAICompatValidation); return _openAICompatValidation }
+        set { withMutation(keyPath: \.openAICompatValidation) { _openAICompatValidation = newValue } }
+    }
+
+    @ObservationIgnored nonisolated(unsafe) private var _isValidatingOpenAICompat = false
+    var isValidatingOpenAICompat: Bool {
+        get { access(keyPath: \.isValidatingOpenAICompat); return _isValidatingOpenAICompat }
+        set { withMutation(keyPath: \.isValidatingOpenAICompat) { _isValidatingOpenAICompat = newValue } }
     }
 
     // MARK: - Ollama State
@@ -189,6 +233,7 @@ final class WizardViewModel {
 
     private var openRouterValidationTask: Task<Void, Never>?
     private var voyageValidationTask: Task<Void, Never>?
+    private var openAICompatValidationTask: Task<Void, Never>?
 
     // MARK: - Initialization
 
@@ -238,6 +283,12 @@ final class WizardViewModel {
             }
             if recommendation.profile.isLocal {
                 return ollamaStatus == .readyWithModels
+            }
+            if recommendation.profile.isOpenAICompat {
+                let urlOK = !openAICompatBaseURLInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let modelOK = !openAICompatModelInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let endpointReachable = openAICompatValidation == .valid || openAICompatValidation?.isNetworkError == true
+                return urlOK && modelOK && endpointReachable
             }
             return true
 
@@ -294,7 +345,7 @@ final class WizardViewModel {
         }
 
         let resolvedLanguage = language ?? inferredLanguage()
-        let resolvedPrivacy = intent == .transcribe ? .cloud : inferredPrivacy(for: intent)
+        let resolvedPrivacy: WizardPrivacy = intent == .transcribe ? .cloud : inferredPrivacy(for: intent)
 
         recommendation = RecommendationEngine.recommend(
             intent: intent,
@@ -355,6 +406,26 @@ final class WizardViewModel {
 
             self.voyageValidation = result
             self.isValidatingVoyage = false
+        }
+    }
+
+    private func validateOpenAICompatEndpoint() {
+        openAICompatValidationTask?.cancel()
+        isValidatingOpenAICompat = true
+        openAICompatValidation = nil
+
+        openAICompatValidationTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled, let self else { return }
+
+            let result = await APIKeyValidator.validateOpenAICompatibleEndpoint(
+                baseURL: self.openAICompatBaseURLInput,
+                apiKey: self.openAICompatApiKeyInput
+            )
+            guard !Task.isCancelled else { return }
+
+            self.openAICompatValidation = result
+            self.isValidatingOpenAICompat = false
         }
     }
 
@@ -456,6 +527,21 @@ final class WizardViewModel {
         if intent == .fullCopilot, recommendation.profile.isCloud {
             settings.voyageApiKey = voyageKeyInput
         }
+        if recommendation.profile.isOpenAICompat {
+            let trimmedURL = openAICompatBaseURLInput.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedKey = openAICompatApiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedModel = openAICompatModelInput.trimmingCharacters(in: .whitespacesAndNewlines)
+            settings.openAILLMBaseURL = trimmedURL
+            settings.openAILLMApiKey = trimmedKey
+            settings.openAILLMModel = trimmedModel
+            if intent == .fullCopilot {
+                settings.openAIEmbedBaseURL = trimmedURL
+                settings.openAIEmbedApiKey = trimmedKey
+                if settings.openAIEmbedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    settings.openAIEmbedModel = "text-embedding-3-small"
+                }
+            }
+        }
 
         settings.suggestionVerbosity = recommendation.suggestionVerbosity
         settings.sidebarMode = recommendation.sidebarMode
@@ -470,7 +556,11 @@ final class WizardViewModel {
     private func clearStaleSettings(for profile: WizardProfile, in settings: SettingsStore) {
         if !profile.isCloud {
             settings.openRouterApiKey = ""
-            settings.voyageApiKey = ""
+            if !profile.isOpenAICompat {
+                // Voyage embeddings only used by cloud profiles. Keep when switching to OpenAI-compat
+                // so a returning user doesn't lose their key, but clear for local profiles.
+                settings.voyageApiKey = ""
+            }
             settings.selectedModel = "google/gemini-3-flash-preview"
             settings.realtimeModel = "google/gemini-3.1-flash-lite-preview"
         }
@@ -479,6 +569,15 @@ final class WizardViewModel {
             settings.ollamaBaseURL = "http://localhost:11434"
             settings.ollamaLLMModel = "qwen3:8b"
             settings.ollamaEmbedModel = "nomic-embed-text"
+        }
+
+        if !profile.isOpenAICompat {
+            settings.openAILLMBaseURL = "http://localhost:4000"
+            settings.openAILLMApiKey = ""
+            settings.openAILLMModel = ""
+            settings.openAIEmbedBaseURL = "http://localhost:8080"
+            settings.openAIEmbedApiKey = ""
+            settings.openAIEmbedModel = "text-embedding-3-small"
         }
 
         if profile.isTranscriptOnly || intent != .fullCopilot {
@@ -491,8 +590,10 @@ final class WizardViewModel {
         switch settings.llmProvider {
         case .openRouter:
             hasConfiguredLLM = !settings.openRouterApiKey.isEmpty
-        case .ollama, .mlx, .openAICompatible:
+        case .ollama, .mlx:
             hasConfiguredLLM = true
+        case .openAICompatible:
+            hasConfiguredLLM = !settings.openAILLMBaseURL.isEmpty && !settings.openAILLMModel.isEmpty
         }
 
         intent = hasConfiguredLLM
@@ -509,8 +610,13 @@ final class WizardViewModel {
         switch settings.llmProvider {
         case .ollama:
             privacy = .local
-        case .openRouter, .mlx, .openAICompatible:
+        case .openRouter, .mlx:
             privacy = .cloud
+        case .openAICompatible:
+            privacy = .openAICompatible
+            openAICompatBaseURLInput = settings.openAILLMBaseURL
+            openAICompatApiKeyInput = settings.openAILLMApiKey
+            openAICompatModelInput = settings.openAILLMModel
         }
     }
 }
