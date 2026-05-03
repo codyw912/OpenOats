@@ -100,6 +100,43 @@ enum APIKeyValidator {
         }
     }
 
+    /// Validate a custom OpenAI-compatible endpoint by hitting `/v1/models`.
+    /// Empty key is allowed — many local servers (LM Studio, llama.cpp) accept unauthenticated requests.
+    static func validateOpenAICompatibleEndpoint(baseURL: String, apiKey: String) async -> ValidationResult {
+        var trimmedBase = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/ "))
+        guard !trimmedBase.isEmpty else {
+            return .invalid(message: "Endpoint URL is empty")
+        }
+
+        for suffix in ["/v1/models", "/v1"] {
+            if trimmedBase.hasSuffix(suffix) {
+                trimmedBase = String(trimmedBase.dropLast(suffix.count))
+            }
+        }
+
+        guard let url = URL(string: trimmedBase + "/v1/models") else {
+            return .invalid(message: "Endpoint URL is not valid")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 5
+        let trimmedKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedKey.isEmpty {
+            request.setValue("Bearer \(trimmedKey)", forHTTPHeaderField: "Authorization")
+        }
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            return validationResult(
+                for: response,
+                authFailureMessage: "The endpoint rejected the API key. Double-check the key and that this server requires one."
+            )
+        } catch {
+            return .networkError(message: "Couldn't reach \(trimmedBase). Check the URL and that the server is running.")
+        }
+    }
+
     static func validationResult(
         for response: URLResponse,
         authFailureMessage: String

@@ -45,6 +45,10 @@ enum RecommendationEngine {
                 return .localMultiLight
             case (.multilingual, .local, .high):
                 return .localMultiFull
+            case (.english, .openAICompatible, _):
+                return .openAICompatEN
+            case (.multilingual, .openAICompatible, _):
+                return .openAICompatMulti
             }
         }
     }
@@ -98,11 +102,11 @@ enum RecommendationEngine {
 
     private static func transcriptionConfig(for profile: WizardProfile, ramTier: RAMTier) -> TranscriptionConfig {
         switch profile {
-        case .transcriptEN, .cloudEN, .localENLight, .localENFull:
+        case .transcriptEN, .cloudEN, .localENLight, .localENFull, .openAICompatEN:
             return TranscriptionConfig(model: .parakeetV2, locale: "en-US")
         case .transcriptMulti:
             return TranscriptionConfig(model: .parakeetV3, locale: "")
-        case .cloudMulti:
+        case .cloudMulti, .openAICompatMulti:
             switch ramTier {
             case .low:
                 return TranscriptionConfig(model: .whisperSmall, locale: "")
@@ -163,6 +167,15 @@ enum RecommendationEngine {
                 ollamaBaseURL: "http://localhost:11434",
                 ollamaLLMModel: "qwen3:8b"
             )
+
+        case .openAICompatEN, .openAICompatMulti:
+            return LLMConfig(
+                provider: .openAICompatible,
+                selectedModel: nil,
+                realtimeModel: nil,
+                ollamaBaseURL: nil,
+                ollamaLLMModel: nil
+            )
         }
     }
 
@@ -183,6 +196,8 @@ enum RecommendationEngine {
             return EmbeddingConfig(provider: .voyageAI, ollamaEmbedModel: nil)
         case .localENLight, .localENFull, .localMultiLight, .localMultiFull:
             return EmbeddingConfig(provider: .ollama, ollamaEmbedModel: "nomic-embed-text")
+        case .openAICompatEN, .openAICompatMulti:
+            return EmbeddingConfig(provider: .openAICompatible, ollamaEmbedModel: nil)
         case .transcriptEN, .transcriptMulti:
             return EmbeddingConfig(provider: nil, ollamaEmbedModel: nil)
         }
@@ -272,7 +287,7 @@ enum RecommendationEngine {
     ) -> DisplayConfig {
         let languageString: String
         switch profile {
-        case .transcriptEN, .cloudEN, .localENLight, .localENFull:
+        case .transcriptEN, .cloudEN, .localENLight, .localENFull, .openAICompatEN:
             languageString = "English"
         default:
             languageString = "Multilingual"
@@ -296,6 +311,8 @@ enum RecommendationEngine {
             providerString = " via cloud"
         case .localENLight, .localENFull, .localMultiLight, .localMultiFull:
             providerString = ", everything local"
+        case .openAICompatEN, .openAICompatMulti:
+            providerString = " via custom OpenAI-compatible endpoint"
         }
 
         let summary = "\(languageString) \(modeString)\(providerString)"
@@ -317,6 +334,11 @@ enum RecommendationEngine {
             details.append("LLM: Qwen3 8B via Ollama")
             if intent == .fullCopilot {
                 details.append("Knowledge retrieval: nomic-embed-text via Ollama")
+            }
+        case .openAICompatEN, .openAICompatMulti:
+            details.append("LLM: custom OpenAI-compatible endpoint")
+            if intent == .fullCopilot {
+                details.append("Knowledge retrieval: same endpoint")
             }
         case .transcriptEN, .transcriptMulti:
             break

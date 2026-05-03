@@ -12,8 +12,6 @@ actor LiveTranscriptCleaner {
     private var pendingQueue: [Utterance] = []
     private var activeTasks: [UUID: Task<Void, Never>] = [:]
 
-    /// Hardcoded cheap model for cleanup (keeps cost low).
-    private let cleanupModel = "openai/gpt-4o-mini"
     private let minimumWordCount = 5
 
     private let systemPrompt = """
@@ -97,19 +95,23 @@ actor LiveTranscriptCleaner {
         // Read settings on MainActor
         let provider = await MainActor.run { settings.llmProvider }
         let openRouterKey = await MainActor.run { settings.openRouterApiKey }
+        let openRouterCleanup = await MainActor.run { settings.openRouterCleanupModel }
         let ollamaURL = await MainActor.run { settings.ollamaBaseURL }
         let ollamaModel = await MainActor.run { settings.ollamaLLMModel }
+        let ollamaCleanup = await MainActor.run { settings.ollamaCleanupModel }
         let mlxURL = await MainActor.run { settings.mlxBaseURL }
         let mlxModelName = await MainActor.run { settings.mlxModel }
+        let mlxCleanup = await MainActor.run { settings.mlxCleanupModel }
         let openAILLMURL = await MainActor.run { settings.openAILLMBaseURL }
         let openAILLMKey = await MainActor.run { settings.openAILLMApiKey }
         let openAILLMModelName = await MainActor.run { settings.openAILLMModel }
+        let openAILLMCleanup = await MainActor.run { settings.openAILLMCleanupModel }
 
         switch provider {
         case .openRouter:
             apiKey = openRouterKey.isEmpty ? nil : openRouterKey
             baseURL = nil
-            model = cleanupModel
+            model = openRouterCleanup.isEmpty ? "openai/gpt-4o-mini" : openRouterCleanup
         case .ollama:
             apiKey = nil
             guard let url = OpenRouterClient.chatCompletionsURL(from: ollamaURL) else {
@@ -117,7 +119,7 @@ actor LiveTranscriptCleaner {
                 return
             }
             baseURL = url
-            model = ollamaModel
+            model = ollamaCleanup.isEmpty ? ollamaModel : ollamaCleanup
         case .mlx:
             apiKey = nil
             guard let url = OpenRouterClient.chatCompletionsURL(from: mlxURL) else {
@@ -125,7 +127,7 @@ actor LiveTranscriptCleaner {
                 return
             }
             baseURL = url
-            model = mlxModelName
+            model = mlxCleanup.isEmpty ? mlxModelName : mlxCleanup
         case .openAICompatible:
             apiKey = openAILLMKey.isEmpty ? nil : openAILLMKey
             guard let url = OpenRouterClient.chatCompletionsURL(from: openAILLMURL) else {
@@ -133,7 +135,7 @@ actor LiveTranscriptCleaner {
                 return
             }
             baseURL = url
-            model = openAILLMModelName
+            model = openAILLMCleanup.isEmpty ? openAILLMModelName : openAILLMCleanup
         }
 
         let messages: [OpenRouterClient.Message] = [
@@ -147,7 +149,8 @@ actor LiveTranscriptCleaner {
                 model: model,
                 messages: messages,
                 maxTokens: 512,
-                baseURL: baseURL
+                baseURL: baseURL,
+                disableReasoning: true
             )
 
             let trimmed = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)

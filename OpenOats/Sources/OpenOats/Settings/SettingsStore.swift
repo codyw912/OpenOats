@@ -122,6 +122,17 @@ final class SettingsStore {
         }
     }
 
+    @ObservationIgnored nonisolated(unsafe) private var _ollamaCleanupModel: String
+    var ollamaCleanupModel: String {
+        get { access(keyPath: \.ollamaCleanupModel); return _ollamaCleanupModel }
+        set {
+            withMutation(keyPath: \.ollamaCleanupModel) {
+                _ollamaCleanupModel = newValue
+                defaults.set(newValue, forKey: "ollamaCleanupModel")
+            }
+        }
+    }
+
     @ObservationIgnored nonisolated(unsafe) private var _ollamaEmbedModel: String
     var ollamaEmbedModel: String {
         get { access(keyPath: \.ollamaEmbedModel); return _ollamaEmbedModel }
@@ -151,6 +162,17 @@ final class SettingsStore {
             withMutation(keyPath: \.mlxModel) {
                 _mlxModel = newValue
                 defaults.set(newValue, forKey: "mlxModel")
+            }
+        }
+    }
+
+    @ObservationIgnored nonisolated(unsafe) private var _mlxCleanupModel: String
+    var mlxCleanupModel: String {
+        get { access(keyPath: \.mlxCleanupModel); return _mlxCleanupModel }
+        set {
+            withMutation(keyPath: \.mlxCleanupModel) {
+                _mlxCleanupModel = newValue
+                defaults.set(newValue, forKey: "mlxCleanupModel")
             }
         }
     }
@@ -191,6 +213,17 @@ final class SettingsStore {
             withMutation(keyPath: \.openAILLMModel) {
                 _openAILLMModel = newValue
                 defaults.set(newValue, forKey: "openAILLMModel")
+            }
+        }
+    }
+
+    @ObservationIgnored nonisolated(unsafe) private var _openAILLMCleanupModel: String
+    var openAILLMCleanupModel: String {
+        get { access(keyPath: \.openAILLMCleanupModel); return _openAILLMCleanupModel }
+        set {
+            withMutation(keyPath: \.openAILLMCleanupModel) {
+                _openAILLMCleanupModel = newValue
+                defaults.set(newValue, forKey: "openAILLMCleanupModel")
             }
         }
     }
@@ -242,6 +275,17 @@ final class SettingsStore {
             withMutation(keyPath: \.selectedModel) {
                 _selectedModel = newValue
                 defaults.set(newValue, forKey: "selectedModel")
+            }
+        }
+    }
+
+    @ObservationIgnored nonisolated(unsafe) private var _openRouterCleanupModel: String
+    var openRouterCleanupModel: String {
+        get { access(keyPath: \.openRouterCleanupModel); return _openRouterCleanupModel }
+        set {
+            withMutation(keyPath: \.openRouterCleanupModel) {
+                _openRouterCleanupModel = newValue
+                defaults.set(newValue, forKey: "openRouterCleanupModel")
             }
         }
     }
@@ -1166,16 +1210,20 @@ final class SettingsStore {
         self._elevenLabsApiKey = ""
         self._ollamaBaseURL = defaults.string(forKey: "ollamaBaseURL") ?? "http://localhost:11434"
         self._ollamaLLMModel = defaults.string(forKey: "ollamaLLMModel") ?? "qwen3:8b"
+        self._ollamaCleanupModel = defaults.string(forKey: "ollamaCleanupModel") ?? ""
         self._ollamaEmbedModel = defaults.string(forKey: "ollamaEmbedModel") ?? "nomic-embed-text"
         self._mlxBaseURL = defaults.string(forKey: "mlxBaseURL") ?? "http://localhost:8080"
         self._mlxModel = defaults.string(forKey: "mlxModel") ?? "mlx-community/Llama-3.2-3B-Instruct-4bit"
+        self._mlxCleanupModel = defaults.string(forKey: "mlxCleanupModel") ?? ""
         self._openAILLMBaseURL = defaults.string(forKey: "openAILLMBaseURL") ?? "http://localhost:4000"
         self._openAILLMApiKey = ""
         self._openAILLMModel = defaults.string(forKey: "openAILLMModel") ?? ""
+        self._openAILLMCleanupModel = defaults.string(forKey: "openAILLMCleanupModel") ?? ""
         self._openAIEmbedBaseURL = defaults.string(forKey: "openAIEmbedBaseURL") ?? "http://localhost:8080"
         self._openAIEmbedApiKey = ""
         self._openAIEmbedModel = defaults.string(forKey: "openAIEmbedModel") ?? "text-embedding-3-small"
         self._selectedModel = defaults.string(forKey: "selectedModel") ?? "google/gemini-3-flash-preview"
+        self._openRouterCleanupModel = defaults.string(forKey: "openRouterCleanupModel") ?? "openai/gpt-4o-mini"
         self._embeddingProvider = EmbeddingProvider(rawValue: defaults.string(forKey: "embeddingProvider") ?? "") ?? .voyageAI
         self._voyageApiKey = ""
         self._suggestionVerbosity = SuggestionVerbosity(

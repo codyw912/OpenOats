@@ -179,6 +179,49 @@ final class RecommendationEngineTests: XCTestCase {
         XCTAssertTrue(recommendation.detailLines.contains("Knowledge retrieval: nomic-embed-text via Ollama"))
     }
 
+    func testOpenAICompatEnglishNotes() {
+        let recommendation = RecommendationEngine.recommend(
+            intent: .notes,
+            language: .english,
+            privacy: .openAICompatible,
+            snapshot: makeSnapshot()
+        )
+
+        XCTAssertEqual(recommendation.profile, .openAICompatEN)
+        XCTAssertEqual(recommendation.transcriptionModel, .parakeetV2)
+        XCTAssertEqual(recommendation.llmProvider, .openAICompatible)
+        XCTAssertNil(recommendation.selectedModel)
+        XCTAssertNil(recommendation.ollamaBaseURL)
+        XCTAssertNil(recommendation.embeddingProvider)
+    }
+
+    func testOpenAICompatMultiHighRAM() {
+        let recommendation = RecommendationEngine.recommend(
+            intent: .notes,
+            language: .multilingual,
+            privacy: .openAICompatible,
+            snapshot: makeSnapshot(ram: highRAM)
+        )
+
+        XCTAssertEqual(recommendation.profile, .openAICompatMulti)
+        XCTAssertEqual(recommendation.transcriptionModel, .whisperLargeV3Turbo)
+        XCTAssertEqual(recommendation.llmProvider, .openAICompatible)
+    }
+
+    func testOpenAICompatFullCopilotUsesSameEndpointForEmbedding() {
+        let recommendation = RecommendationEngine.recommend(
+            intent: .fullCopilot,
+            language: .english,
+            privacy: .openAICompatible,
+            snapshot: makeSnapshot()
+        )
+
+        XCTAssertEqual(recommendation.profile, .openAICompatEN)
+        XCTAssertEqual(recommendation.embeddingProvider, .openAICompatible)
+        XCTAssertTrue(recommendation.suggestionPanelEnabled)
+        XCTAssertTrue(recommendation.detailLines.contains("Knowledge retrieval: same endpoint"))
+    }
+
     func testLocalNotesDoesNotIncludeEmbedding() {
         let recommendation = RecommendationEngine.recommend(
             intent: .notes,

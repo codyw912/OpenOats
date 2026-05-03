@@ -703,17 +703,37 @@ private struct IntelligenceSettingsTab: View {
 
                         TextField("Model", text: $settings.selectedModel, prompt: Text("e.g. google/gemini-3-flash-preview"))
                             .font(.system(size: 12, design: .monospaced))
+
+                        TextField(
+                            "Cleanup model",
+                            text: $settings.openRouterCleanupModel,
+                            prompt: Text("openai/gpt-4o-mini")
+                        )
+                        .font(.system(size: 12, design: .monospaced))
                     case .ollama:
                         TextField("Ollama URL", text: $settings.ollamaBaseURL, prompt: Text("http://localhost:11434"))
                             .font(.system(size: 12, design: .monospaced))
 
                         OllamaModelField(modelName: $settings.ollamaLLMModel, baseURL: settings.ollamaBaseURL, placeholder: "e.g. qwen3:8b")
+
+                        OllamaModelField(
+                            modelName: $settings.ollamaCleanupModel,
+                            baseURL: settings.ollamaBaseURL,
+                            placeholder: "Cleanup model (optional)"
+                        )
                     case .mlx:
                         TextField("MLX Server URL", text: $settings.mlxBaseURL, prompt: Text("http://localhost:8080"))
                             .font(.system(size: 12, design: .monospaced))
 
                         TextField("Model", text: $settings.mlxModel, prompt: Text("e.g. mlx-community/Llama-3.2-3B-Instruct-4bit"))
                             .font(.system(size: 12, design: .monospaced))
+
+                        TextField(
+                            "Cleanup model",
+                            text: $settings.mlxCleanupModel,
+                            prompt: Text("Optional. Leave empty to reuse main model.")
+                        )
+                        .font(.system(size: 12, design: .monospaced))
                     case .openAICompatible:
                         TextField("Endpoint URL", text: $settings.openAILLMBaseURL, prompt: Text("http://localhost:4000"))
                             .font(.system(size: 12, design: .monospaced))
@@ -721,9 +741,24 @@ private struct IntelligenceSettingsTab: View {
                         SecureField("API Key (optional)", text: $settings.openAILLMApiKey)
                             .font(.system(size: 12, design: .monospaced))
 
-                        TextField("Model", text: $settings.openAILLMModel, prompt: Text("e.g. gpt-4o-mini"))
-                            .font(.system(size: 12, design: .monospaced))
+                        OpenAICompatibleModelField(
+                            modelName: $settings.openAILLMModel,
+                            baseURL: settings.openAILLMBaseURL,
+                            apiKey: settings.openAILLMApiKey,
+                            placeholder: "e.g. gpt-4o-mini"
+                        )
+
+                        OpenAICompatibleModelField(
+                            modelName: $settings.openAILLMCleanupModel,
+                            baseURL: settings.openAILLMBaseURL,
+                            apiKey: settings.openAILLMApiKey,
+                            placeholder: "Cleanup model (optional)"
+                        )
                     }
+
+                    Text("Cleanup model is used for transcript cleanup (filler removal, punctuation). Leave empty to reuse the main model. A small non-reasoning model is ideal — cleanup is mechanical and doesn't benefit from reasoning.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
                 }
 
                 Section("Knowledge Base") {
@@ -784,8 +819,12 @@ private struct IntelligenceSettingsTab: View {
                             SecureField("API Key (optional)", text: $settings.openAIEmbedApiKey)
                                 .font(.system(size: 12, design: .monospaced))
 
-                            TextField("Model", text: $settings.openAIEmbedModel, prompt: Text("e.g. text-embedding-3-small"))
-                                .font(.system(size: 12, design: .monospaced))
+                            OpenAICompatibleModelField(
+                                modelName: $settings.openAIEmbedModel,
+                                baseURL: settings.openAIEmbedBaseURL,
+                                apiKey: settings.openAIEmbedApiKey,
+                                placeholder: "e.g. text-embedding-3-small"
+                            )
                         }
                     } else {
                         Text("Choose a Knowledge Base folder above to turn on retrieval settings. These controls are only used for Knowledge Base features such as relevant context and suggestions.")

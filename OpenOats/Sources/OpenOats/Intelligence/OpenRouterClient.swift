@@ -34,6 +34,10 @@ actor OpenRouterClient {
         static let `default` = WebSearchPlugin(id: "web", max_results: 5)
     }
 
+    struct ChatTemplateKwargs: Codable, Sendable {
+        let enable_thinking: Bool?
+    }
+
     struct ChatRequest: Codable {
         let model: String
         let messages: [Message]
@@ -42,6 +46,21 @@ actor OpenRouterClient {
         let max_completion_tokens: Int?
         let temperature: Double?
         let plugins: [WebSearchPlugin]?
+        let reasoning_effort: String?
+        let chat_template_kwargs: ChatTemplateKwargs?
+    }
+
+    /// Mutates a message list to suppress reasoning on servers that honor the Qwen-style
+    /// `/no_think` inline token. Appends to the last user message; safe no-op for models
+    /// that don't recognize it.
+    private static func appendNoThinkHint(_ messages: [Message]) -> [Message] {
+        guard let lastUserIndex = messages.lastIndex(where: { $0.role == "user" }) else {
+            return messages
+        }
+        var updated = messages
+        let original = updated[lastUserIndex]
+        updated[lastUserIndex] = Message(role: original.role, content: original.content + "\n/no_think")
+        return updated
     }
 
     /// Whether a URL points to a host that supports the `max_completion_tokens`
@@ -70,7 +89,8 @@ actor OpenRouterClient {
         model: String,
         messages: [Message],
         maxTokens: Int = 1024,
-        baseURL: URL? = nil
+        baseURL: URL? = nil,
+        disableReasoning: Bool = false
     ) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             let task = Task {
@@ -81,14 +101,17 @@ actor OpenRouterClient {
                         return
                     }
                     let useNewParam = Self.usesMaxCompletionTokens(targetURL)
+                    let outgoingMessages = disableReasoning ? Self.appendNoThinkHint(messages) : messages
                     let request = ChatRequest(
                         model: model,
-                        messages: messages,
+                        messages: outgoingMessages,
                         stream: true,
                         max_tokens: useNewParam ? nil : maxTokens,
                         max_completion_tokens: useNewParam ? maxTokens : nil,
                         temperature: nil,
-                        plugins: nil
+                        plugins: nil,
+                        reasoning_effort: disableReasoning ? "minimal" : nil,
+                        chat_template_kwargs: disableReasoning ? ChatTemplateKwargs(enable_thinking: false) : nil
                     )
 
                     var urlRequest = URLRequest(url: targetURL)
@@ -147,21 +170,25 @@ actor OpenRouterClient {
         maxTokens: Int = 512,
         temperature: Double? = nil,
         baseURL: URL? = nil,
-        webSearch: Bool = false
+        webSearch: Bool = false,
+        disableReasoning: Bool = false
     ) async throws -> String {
         let targetURL = baseURL ?? Self.defaultBaseURL
         if let preflightError = Self.preflightError(for: targetURL, apiKey: apiKey) {
             throw preflightError
         }
         let useNewParam = Self.usesMaxCompletionTokens(targetURL)
+        let outgoingMessages = disableReasoning ? Self.appendNoThinkHint(messages) : messages
         let request = ChatRequest(
             model: model,
-            messages: messages,
+            messages: outgoingMessages,
             stream: false,
             max_tokens: useNewParam ? nil : maxTokens,
             max_completion_tokens: useNewParam ? maxTokens : nil,
             temperature: temperature,
-            plugins: webSearch ? [.default] : nil
+            plugins: webSearch ? [.default] : nil,
+            reasoning_effort: disableReasoning ? "minimal" : nil,
+            chat_template_kwargs: disableReasoning ? ChatTemplateKwargs(enable_thinking: false) : nil
         )
         var urlRequest = URLRequest(url: targetURL)
         urlRequest.httpMethod = "POST"

@@ -24,8 +24,10 @@ enum WizardLanguage: String, CaseIterable, Sendable {
 enum WizardPrivacy: String, CaseIterable, Sendable {
     /// Everything stays on-device via Ollama.
     case local
-    /// Use cloud APIs.
+    /// Use cloud APIs (OpenRouter).
     case cloud
+    /// Use any OpenAI-compatible endpoint (local or hosted).
+    case openAICompatible
 }
 
 // MARK: - Detection Results
@@ -87,6 +89,8 @@ enum WizardProfile: String, CaseIterable, Sendable {
     case localENFull = "local-en-full"
     case localMultiLight = "local-multi-light"
     case localMultiFull = "local-multi-full"
+    case openAICompatEN = "openai-compat-en"
+    case openAICompatMulti = "openai-compat-multi"
 
     var isCloud: Bool {
         switch self {
@@ -106,6 +110,15 @@ enum WizardProfile: String, CaseIterable, Sendable {
         }
     }
 
+    var isOpenAICompat: Bool {
+        switch self {
+        case .openAICompatEN, .openAICompatMulti:
+            true
+        default:
+            false
+        }
+    }
+
     var isTranscriptOnly: Bool {
         switch self {
         case .transcriptEN, .transcriptMulti:
@@ -117,4 +130,5 @@ enum WizardProfile: String, CaseIterable, Sendable {
 
     var needsOpenRouterKey: Bool { isCloud }
     var needsOllama: Bool { isLocal }
+    var needsOpenAICompatEndpoint: Bool { isOpenAICompat }
 }

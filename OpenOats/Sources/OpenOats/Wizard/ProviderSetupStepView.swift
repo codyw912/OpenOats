@@ -11,6 +11,10 @@ struct ProviderSetupStepView: View {
         viewModel.recommendation?.profile.isCloud ?? false
     }
 
+    private var isOpenAICompatPath: Bool {
+        viewModel.recommendation?.profile.isOpenAICompat ?? false
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -34,6 +38,8 @@ struct ProviderSetupStepView: View {
 
             if isCloudPath {
                 cloudSetupContent
+            } else if isOpenAICompatPath {
+                openAICompatSetupContent
             } else {
                 ollamaSetupContent
             }
@@ -62,7 +68,7 @@ struct ProviderSetupStepView: View {
         }
         .padding(28)
         .task(id: viewModel.recommendation?.profile) {
-            guard !isCloudPath else { return }
+            guard !isCloudPath, !isOpenAICompatPath else { return }
             await viewModel.checkOllamaStatus()
         }
         .onChange(of: viewModel.ollamaStatus) { _, newStatus in
@@ -143,6 +149,77 @@ struct ProviderSetupStepView: View {
                 }
             }
         }
+    }
+
+    // MARK: - OpenAI-Compatible Path
+
+    private var openAICompatSetupContent: some View {
+        VStack(spacing: 20) {
+            Text("Connect a custom OpenAI-compatible service")
+                .font(.system(size: 16, weight: .semibold))
+                .multilineTextAlignment(.center)
+
+            Text("Point OpenOats at any service that exposes the OpenAI Chat Completions API. This works with local servers like LM Studio, vLLM, llama.cpp; proxies like LiteLLM; and hosted providers like Azure OpenAI, Groq, Together, or Fireworks.")
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Endpoint URL")
+                    .font(.system(size: 12, weight: .medium))
+
+                HStack(spacing: 8) {
+                    TextField(
+                        "Endpoint URL",
+                        text: $viewModel.openAICompatBaseURLInput,
+                        prompt: Text("http://localhost:1234")
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12, design: .monospaced))
+
+                    validationIndicator(
+                        isValidating: viewModel.isValidatingOpenAICompat,
+                        result: viewModel.openAICompatValidation
+                    )
+                }
+
+                Text("Just the base — `/v1/chat/completions` is added for you. A trailing `/v1` is fine too.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("API key (optional)")
+                    .font(.system(size: 12, weight: .medium))
+
+                SecureField(
+                    "API key",
+                    text: $viewModel.openAICompatApiKeyInput,
+                    prompt: Text("Leave empty for unauthenticated local servers")
+                )
+                .textFieldStyle(.roundedBorder)
+                .font(.system(size: 12, design: .monospaced))
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Model")
+                    .font(.system(size: 12, weight: .medium))
+
+                OpenAICompatibleModelField(
+                    modelName: $viewModel.openAICompatModelInput,
+                    baseURL: viewModel.openAICompatBaseURLInput,
+                    apiKey: viewModel.openAICompatApiKeyInput,
+                    placeholder: "e.g. gpt-4o-mini"
+                )
+
+                Text("Picked from `/v1/models` if your server exposes it. Otherwise type the model ID directly.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+
+            validationMessage(result: viewModel.openAICompatValidation)
+        }
+        .frame(maxWidth: 460)
     }
 
     // MARK: - Local Path

@@ -61,7 +61,7 @@ struct LanguagePrivacyStepView: View {
                 Spacer().frame(height: 32)
 
                 VStack(spacing: 20) {
-                    Text("Where should AI processing happen?")
+                    Text("Choose your AI service")
                         .font(.system(size: 16, weight: .semibold))
                         .multilineTextAlignment(.center)
 
@@ -70,7 +70,7 @@ struct LanguagePrivacyStepView: View {
                             privacy: .local,
                             icon: "desktopcomputer",
                             title: "Keep everything on this Mac",
-                            subtitle: "Fully private. Nothing leaves your computer.",
+                            subtitle: "Fully private via Ollama. Nothing leaves your computer.",
                             hint: viewModel.snapshot.ollamaReachable ? "Your Mac is already set up for local AI" : nil,
                             isSelected: viewModel.privacy == .local
                         )
@@ -78,14 +78,28 @@ struct LanguagePrivacyStepView: View {
                         privacyOption(
                             privacy: .cloud,
                             icon: "cloud",
-                            title: "Use the cloud",
-                            subtitle: "Faster, easier setup.",
+                            title: "Use the cloud (OpenRouter)",
+                            subtitle: "Faster, easier setup. Bring an OpenRouter key.",
                             hint: viewModel.snapshot.hasOpenRouterKey ? "Cloud API key detected" : nil,
                             isSelected: viewModel.privacy == .cloud
                         )
 
+                        privacyOption(
+                            privacy: .openAICompatible,
+                            icon: "server.rack",
+                            title: "Custom (OpenAI-compatible)",
+                            subtitle: "Point at any OpenAI-compatible endpoint — LM Studio, vLLM, LiteLLM, Azure, Groq, Together, etc.",
+                            hint: nil,
+                            isSelected: viewModel.privacy == .openAICompatible
+                        )
+
                         if viewModel.privacy == .cloud {
                             Text("Transcription always stays on your Mac. Cloud notes and summaries send text only. Calendar titles and participant names are included only if you separately enable calendar context for cloud-generated notes.")
+                                .font(.system(size: 10))
+                                .foregroundStyle(.tertiary)
+                                .padding(.horizontal, 14)
+                        } else if viewModel.privacy == .openAICompatible {
+                            Text("Transcription stays on your Mac. Notes and other text are sent to whatever endpoint you configure on the next screen.")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.tertiary)
                                 .padding(.horizontal, 14)

@@ -64,7 +64,8 @@ final class BatchTextCleaner {
         case .openRouter:
             apiKey = settings.openRouterApiKey.isEmpty ? nil : settings.openRouterApiKey
             baseURL = nil
-            model = "openai/gpt-4o-mini"
+            let configured = settings.openRouterCleanupModel
+            model = configured.isEmpty ? "openai/gpt-4o-mini" : configured
         case .ollama:
             apiKey = nil
             guard let ollamaURL = OpenRouterClient.chatCompletionsURL(from: settings.ollamaBaseURL) else {
@@ -73,7 +74,8 @@ final class BatchTextCleaner {
                 return records
             }
             baseURL = ollamaURL
-            model = settings.ollamaLLMModel
+            let configured = settings.ollamaCleanupModel
+            model = configured.isEmpty ? settings.ollamaLLMModel : configured
         case .mlx:
             apiKey = nil
             guard let mlxURL = OpenRouterClient.chatCompletionsURL(from: settings.mlxBaseURL) else {
@@ -82,7 +84,8 @@ final class BatchTextCleaner {
                 return records
             }
             baseURL = mlxURL
-            model = settings.mlxModel
+            let configured = settings.mlxCleanupModel
+            model = configured.isEmpty ? settings.mlxModel : configured
         case .openAICompatible:
             apiKey = settings.openAILLMApiKey.isEmpty ? nil : settings.openAILLMApiKey
             guard let openAIURL = OpenRouterClient.chatCompletionsURL(from: settings.openAILLMBaseURL) else {
@@ -91,7 +94,8 @@ final class BatchTextCleaner {
                 return records
             }
             baseURL = openAIURL
-            model = settings.openAILLMModel
+            let configured = settings.openAILLMCleanupModel
+            model = configured.isEmpty ? settings.openAILLMModel : configured
         }
 
         let chunks = Self.chunkRecords(records)
@@ -247,7 +251,8 @@ final class BatchTextCleaner {
                 model: model,
                 messages: messages,
                 maxTokens: 4096,
-                baseURL: baseURL
+                baseURL: baseURL,
+                disableReasoning: true
             )
 
             return parseResponse(response, originalRecords: records)
@@ -258,26 +263,49 @@ final class BatchTextCleaner {
     }
 
     /// Parses the LLM response back into session records, stripping the
-    /// `[HH:MM:SS] Speaker: ` prefix from each line.
+    /// `[HH:MM:SS] Speaker: ` prefix from each line. Tries to recover from
+    /// common LLM quirks (preamble lines, trailing summary, code fences)
+    /// before giving up.
     nonisolated static func parseResponse(
         _ response: String,
         originalRecords: [SessionRecord]
     ) -> [SessionRecord]? {
-        let responseLines = response
+        let prefixPattern = /^\[\d{2}:\d{2}:\d{2}\]\s+\w+:\s*/
+
+        // Strip code fences the model may have wrapped the response in.
+        var working = response.trimmingCharacters(in: .whitespacesAndNewlines)
+        if working.hasPrefix("```") {
+            working = working.split(separator: "\n", omittingEmptySubsequences: false)
+                .dropFirst()
+                .joined(separator: "\n")
+            if let fenceEnd = working.range(of: "```", options: .backwards) {
+                working = String(working[..<fenceEnd.lowerBound])
+            }
+        }
+
+        let allLines = working
             .split(separator: "\n", omittingEmptySubsequences: true)
             .map(String.init)
 
-        guard responseLines.count == originalRecords.count else {
-            // Line count mismatch - fall back to originals.
+        // Filter to only lines that match the timestamp prefix, dropping any
+        // preamble like "Here's the cleaned transcript:" or trailing commentary.
+        let formattedLines = allLines.filter { $0.firstMatch(of: prefixPattern) != nil }
+        let candidateLines = formattedLines.count == originalRecords.count
+            ? formattedLines
+            : allLines
+
+        guard candidateLines.count == originalRecords.count else {
+            let snippet = String(response.prefix(400)).replacingOccurrences(of: "\n", with: "⏎")
+            Log.batchTextCleaner.error(
+                "Cleanup parse mismatch: expected \(originalRecords.count, privacy: .public) lines, got \(candidateLines.count, privacy: .public). Response snippet: \(snippet, privacy: .public)"
+            )
             return nil
         }
-
-        let prefixPattern = /^\[\d{2}:\d{2}:\d{2}\]\s+\w+:\s*/
 
         var updated: [SessionRecord] = []
         updated.reserveCapacity(originalRecords.count)
 
-        for (line, original) in zip(responseLines, originalRecords) {
+        for (line, original) in zip(candidateLines, originalRecords) {
             let cleanedText: String
             if let match = line.prefixMatch(of: prefixPattern) {
                 cleanedText = String(line[match.range.upperBound...])
